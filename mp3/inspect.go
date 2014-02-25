@@ -19,5 +19,6 @@ func InspectFile(path string) (*MP3Info, error) {
             break
         }
     }
+	s.Info.FrameCount = s.FrameCount
     return s.Info, nil
 }

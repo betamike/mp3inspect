@@ -100,12 +100,12 @@ type MP3Info struct {
     FoundMPEG25 bool
 
     UnknownBytes uint64
+
+	FrameCount int
 }
 
 //information about one mp3 audio frame
 type AudioFrame struct {
-    Offset int64
-
     Version uint8
     Layer uint8
     CRC bool
