@@ -1,24 +1,24 @@
 package mp3
 
 import (
-    "io"
+	"io"
 )
 
 func InspectFile(path string) (*MP3Info, error) {
-    s, err := NewScanner(path)
-    if err != nil {
-        return nil, err
-    }
+	s, err := NewScanner(path)
+	if err != nil {
+		return nil, err
+	}
 
-    for {
-        _, err := s.NextFrame()
-        if err != nil {
-            if err != io.EOF {
-                return nil, err
-            }
-            break
-        }
-    }
+	for {
+		_, err := s.NextFrame()
+		if err != nil {
+			if err != io.EOF {
+				return nil, err
+			}
+			break
+		}
+	}
 	s.Info.FrameCount = s.FrameCount
-    return s.Info, nil
+	return s.Info, nil
 }

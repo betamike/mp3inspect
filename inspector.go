@@ -1,26 +1,26 @@
 package main
 
 import (
-    "flag"
-    "fmt"
-    "log"
+	"flag"
+	"fmt"
+	"log"
 
-    "github.com/betamike/mp3inspect/mp3"
+	"github.com/betamike/mp3inspect/mp3"
 )
 
 func main() {
-    flag.Parse()
-    path := flag.Arg(0)
+	flag.Parse()
+	path := flag.Arg(0)
 
-    if path == "" {
-        log.Fatal("Missing file path!")
-    }
+	if path == "" {
+		log.Fatal("Missing file path!")
+	}
 
-    info, err := mp3.InspectFile(path)
-    if err != nil {
-        fmt.Printf("MP3 inspection failed: %s", err)
-        return
-    }
+	info, err := mp3.InspectFile(path)
+	if err != nil {
+		fmt.Printf("MP3 inspection failed: %s", err)
+		return
+	}
 
 	printInfo(info)
 }
@@ -30,7 +30,7 @@ func printInfo(info *mp3.MP3Info) {
 		fmt.Printf("MPEG v1 Layer III (Inspected %d frames)\n", info.FrameCount)
 	}
 	if info.FoundMPEG2 || info.FoundMPEG25 ||
-	   info.FoundLayer2 || info.FoundLayer1 {
+		info.FoundLayer2 || info.FoundLayer1 {
 		fmt.Printf("(Found non-mp3 frame versions)\n")
 	}
 	brType := "CBR"
