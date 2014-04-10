@@ -2,11 +2,12 @@ package mp3
 
 import (
 	"bytes"
+	"io"
 	"os"
 )
 
 type Scanner struct {
-	f *os.File
+	f io.ReadSeeker
 
 	buf                 []byte
 	FrameCount, curSize int
@@ -17,12 +18,7 @@ type Scanner struct {
 	Info *MP3Info
 }
 
-func NewScanner(path string) (*Scanner, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-
+func NewScanner(f io.ReadSeeker) (*Scanner, error) {
 	return &Scanner{f: f, buf: make([]byte, 4096), Info: &MP3Info{}}, nil
 }
 
@@ -134,8 +130,4 @@ func (s *Scanner) NextFrame() (*AudioFrame, uint64, error) {
 	}
 
 	return frame, pos, nil
-}
-
-func (s *Scanner) Close() error {
-	return s.f.Close()
 }
