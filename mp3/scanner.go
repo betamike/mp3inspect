@@ -12,6 +12,7 @@ type Scanner struct {
 	FrameCount, curSize int
 	vbrCounter          uint64
 	r, seek             int64
+	absPos				uint64
 
 	Info *MP3Info
 }
@@ -25,8 +26,9 @@ func NewScanner(path string) (*Scanner, error) {
 	return &Scanner{f: f, buf: make([]byte, 4096), Info: &MP3Info{}}, nil
 }
 
-func (s *Scanner) NextFrame() (*AudioFrame, error) {
+func (s *Scanner) NextFrame() (*AudioFrame, uint64, error) {
 	var frame *AudioFrame
+	var pos uint64
 	var err error
 	for frame == nil {
 		if s.seek > 0 {
@@ -35,14 +37,16 @@ func (s *Scanner) NextFrame() (*AudioFrame, error) {
 				s.seek -= (int64(s.curSize) - s.r)
 				_, err = s.f.Seek(s.seek, os.SEEK_CUR)
 				if err != nil {
-					return nil, err
+					return nil, 0, err
 				}
+				s.absPos = uint64(s.seek)
 
 				s.r = 0
 				s.curSize, err = s.f.Read(s.buf)
 				if s.curSize < 0 || err != nil {
-					return nil, err
+					return nil, 0, err
 				}
+				s.absPos += uint64(s.curSize)
 			} else {
 				s.r += s.seek
 			}
@@ -60,8 +64,9 @@ func (s *Scanner) NextFrame() (*AudioFrame, error) {
 			s.r = 0
 			s.curSize, err = s.f.Read(s.buf[rem:])
 			if s.curSize < 0 || err != nil {
-				return nil, err
+				return nil, 0, err
 			}
+			s.absPos += uint64(s.curSize)
 		}
 
 		//fmt.Printf("%d : %d == %d\n", r, 4, r+4)
@@ -78,6 +83,7 @@ func (s *Scanner) NextFrame() (*AudioFrame, error) {
 				s.r -= 3
 				break
 			}
+			pos = s.absPos - uint64(s.r) - 4
 
 			s.FrameCount++
 			if s.Info.Bitrate != frame.Bitrate {
@@ -127,7 +133,7 @@ func (s *Scanner) NextFrame() (*AudioFrame, error) {
 		}
 	}
 
-	return frame, nil
+	return frame, pos, nil
 }
 
 func (s *Scanner) Close() error {

@@ -11,7 +11,7 @@ func InspectFile(path string) (*MP3Info, error) {
 	}
 
 	for {
-		_, err := s.NextFrame()
+		_, _, err := s.NextFrame()
 		if err != nil {
 			if err != io.EOF {
 				return nil, err
