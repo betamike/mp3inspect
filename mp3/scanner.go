@@ -35,7 +35,7 @@ func (s *Scanner) NextFrame() (*AudioFrame, uint64, error) {
 				if err != nil {
 					return nil, 0, err
 				}
-				s.absPos = uint64(s.seek)
+				s.absPos += uint64(s.seek)
 
 				s.r = 0
 				s.curSize, err = s.f.Read(s.buf)
@@ -79,7 +79,7 @@ func (s *Scanner) NextFrame() (*AudioFrame, uint64, error) {
 				s.r -= 3
 				break
 			}
-			pos = s.absPos - uint64(s.r) - 4
+			pos = s.absPos - uint64(s.curSize) + uint64(s.r) - 4 // magic!
 
 			s.FrameCount++
 			if s.Info.Bitrate != frame.Bitrate {

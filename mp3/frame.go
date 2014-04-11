@@ -4,23 +4,23 @@ import (
 	"time"
 )
 
+type MPEGVersion int
+
 const (
-	MPEG25 = iota
+	MPEG25 MPEGVersion = iota
 	MPEG_RESERVED
 	MPEG2
 	MPEG1
 )
 
-type MPEGVersion int
+type MPEGLayer int
 
 const (
-	LAYER_RESERVED = iota
+	LAYER_RESERVED MPEGLayer = iota
 	LAYER3
 	LAYER2
 	LAYER1
 )
-
-type MPEGLayer int
 
 const (
 	STEREO         = iota
@@ -106,8 +106,8 @@ type MP3Info struct {
 
 //information about one mp3 audio frame
 type AudioFrame struct {
-	Version         uint8
-	Layer           uint8
+	Version         MPEGVersion
+	Layer           MPEGLayer
 	CRC             bool
 	BitrateIndex    uint8
 	SamplerateIndex uint8
@@ -127,8 +127,8 @@ type AudioFrame struct {
 
 func parseAudioFrame(buf []byte) (int64, *AudioFrame) {
 	frame := &AudioFrame{}
-	frame.Version = buf[1] & 0x18 >> 3
-	frame.Layer = buf[1] & 0x6 >> 1
+	frame.Version = MPEGVersion(buf[1] & 0x18 >> 3)
+	frame.Layer = MPEGLayer(buf[1] & 0x6 >> 1)
 	frame.CRC = (buf[1] & 0x1) != 1
 	frame.BitrateIndex = buf[2] & 0xF0 >> 4
 	frame.SamplerateIndex = buf[2] & 0xC >> 2
