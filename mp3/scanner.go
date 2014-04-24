@@ -9,6 +9,10 @@ import (
 type Scanner struct {
 	f io.ReadSeeker
 
+	// The version and layer we are looking for
+	version MPEGVersion
+	layer MPEGLayer
+
 	buf                 []byte
 	FrameCount, curSize int
 	vbrCounter          uint64
@@ -18,8 +22,18 @@ type Scanner struct {
 	Info *MP3Info
 }
 
-func NewScanner(f io.ReadSeeker) (*Scanner, error) {
-	return &Scanner{f: f, buf: make([]byte, 4096), Info: &MP3Info{}}, nil
+func NewScanner(f io.ReadSeeker, version MPEGVersion, layer MPEGLayer) (*Scanner, error) {
+	return &Scanner{
+		f: f,
+		version: version,
+		layer: layer,
+		buf: make([]byte, 4096),
+		Info: &MP3Info{},
+	}, nil
+}
+
+func NewMP3Scanner(f io.ReadSeeker) (*Scanner, error) {
+	return NewScanner(f, MPEG1, LAYER3)
 }
 
 func (s *Scanner) NextFrame() (*AudioFrame, uint64, error) {
@@ -73,8 +87,9 @@ func (s *Scanner) NextFrame() (*AudioFrame, uint64, error) {
 		//potentially an audio frame
 		case cur[0] == 0xFF && cur[1]&0xE0 == 0xE0:
 			s.seek, frame = parseAudioFrame(cur)
-			if frame == nil {
+			if frame == nil || frame.Version != s.version || frame.Layer != s.layer {
 				//fmt.Printf("Bad potential frame\n")
+				frame = nil
 				s.seek = 0
 				s.r -= 3
 				break
