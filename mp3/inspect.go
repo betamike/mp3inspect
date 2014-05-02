@@ -11,7 +11,7 @@ func InspectFile(path string) (*MP3Info, error) {
 		return nil, err
 	}
 
-	s, err := NewScanner(f)
+	s, err := NewMP3Scanner(f)
 	if err != nil {
 		return nil, err
 	}

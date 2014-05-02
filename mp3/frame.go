@@ -153,5 +153,5 @@ func parseAudioFrame(buf []byte) (int64, *AudioFrame) {
 	samples := SamplesLookupTable[frame.Version][frame.Layer]
 	frame.Size = (((samples / 8) * frame.Bitrate) / frame.Samplerate) + uint64(frame.Padding)
 
-	return int64(frame.Size) - 4, frame
+	return int64(frame.Size), frame
 }
