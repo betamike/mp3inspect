@@ -11,24 +11,23 @@ type Scanner struct {
 
 	// The version and layer we are looking for
 	version MPEGVersion
-	layer MPEGLayer
+	layer   MPEGLayer
 
 	buf                 []byte
 	FrameCount, curSize int
 	vbrCounter          uint64
-	r, seek             int64
-	absPos				uint64
+	curPos, absPos      int64
 
 	Info *MP3Info
 }
 
 func NewScanner(f io.ReadSeeker, version MPEGVersion, layer MPEGLayer) (*Scanner, error) {
 	return &Scanner{
-		f: f,
+		f:       f,
 		version: version,
-		layer: layer,
-		buf: make([]byte, 4096),
-		Info: &MP3Info{},
+		layer:   layer,
+		buf:     make([]byte, 4096),
+		Info:    &MP3Info{},
 	}, nil
 }
 
@@ -36,65 +35,88 @@ func NewMP3Scanner(f io.ReadSeeker) (*Scanner, error) {
 	return NewScanner(f, MPEG1, LAYER3)
 }
 
-func (s *Scanner) NextFrame() (*AudioFrame, uint64, error) {
-	var frame *AudioFrame
-	var pos uint64
+// The error returned from here does not indicate that the scan has failed,
+// since it could just be eof.
+func (s *Scanner) seekTo(pos int64) error {
 	var err error
-	for frame == nil {
-		if s.seek > 0 {
-			if (s.r + s.seek) > int64(s.curSize) {
-				//remove already buffered data from seek offset
-				s.seek -= (int64(s.curSize) - s.r)
-				_, err = s.f.Seek(s.seek, os.SEEK_CUR)
-				if err != nil {
-					return nil, 0, err
-				}
-				s.absPos += uint64(s.seek)
+	if _, err = s.f.Seek(pos, os.SEEK_SET); err != nil {
+		return err
+	}
+	s.absPos = pos
 
-				s.r = 0
-				s.curSize, err = s.f.Read(s.buf)
-				if s.curSize < 0 || err != nil {
-					return nil, 0, err
-				}
-				s.absPos += uint64(s.curSize)
-			} else {
-				s.r += s.seek
-			}
-		}
-		s.seek = 0
+	s.curPos = 0
+	s.curSize, err = s.f.Read(s.buf)
+	s.absPos += int64(s.curSize)
+	return err
+}
 
-		if (s.r + 10) > int64(s.curSize) {
-			rem := int64(s.curSize) - s.r
+func (s *Scanner) frameDataAt(buf []byte) (int64, *AudioFrame, bool) {
+	seekAmount, frame := parseAudioFrame(buf)
+	b := !(frame == nil || frame.Version != s.version || frame.Layer != s.layer)
+	if !b {
+		return 0, nil, false
+	}
+	return seekAmount, frame, true
+}
+
+func (s *Scanner) NextFrame() (*AudioFrame, uint64, error) {
+	var err error
+	var ok, done bool
+	var seekAmount int64
+	var frame *AudioFrame
+	var framePos int64
+
+	for !done {
+
+		// Make sure the buffer has enough unlooked-at data in it, if not move
+		// the unlooked at data to the start of the buffer and read more in
+		if s.curPos+4 >= int64(s.curSize) {
+			rem := int64(s.curSize) - s.curPos
 			if rem > 0 {
-				copy(s.buf[:rem], s.buf[s.r:])
+				copy(s.buf[:rem], s.buf[s.curPos:])
 			} else {
 				rem = 0
 			}
 
-			s.r = 0
+			s.curPos = 0
 			s.curSize, err = s.f.Read(s.buf[rem:])
-			if s.curSize < 0 || err != nil {
+			if err != nil {
 				return nil, 0, err
 			}
-			s.absPos += uint64(s.curSize)
+			s.curSize += int(rem)
+			s.absPos += int64(s.curSize)
 		}
 
-		//fmt.Printf("%d : %d == %d\n", r, 4, r+4)
-		cur := s.buf[s.r : s.r+4]
-		s.r += 4
+		cur := s.buf[s.curPos : s.curPos+4]
+		curAbsPos := s.absPos - int64(s.curSize) + s.curPos
 
 		switch {
 		//potentially an audio frame
 		case cur[0] == 0xFF && cur[1]&0xE0 == 0xE0:
-			s.seek, frame = parseAudioFrame(cur)
-			if frame == nil || frame.Version != s.version || frame.Layer != s.layer {
-				//fmt.Printf("Bad potential frame\n")
-				frame = nil
-				s.seek = 0
-				s.r -= 3
+			var seekAmount int64
+			if seekAmount, frame, ok = s.frameDataAt(cur); !ok {
 				break
 			}
-			pos = s.absPos - uint64(s.curSize) + uint64(s.r) - 4 // magic!
+
+			// Where to come back to if the next frame isn't valid
+			returnPos := curAbsPos + 1
+			framePos = curAbsPos
+			nextFramePos := framePos + seekAmount
+
+			// We seek to where the next frame should be and check that it's
+			// there. If it's not we seek back to the return position. seekTo // handles reading into buf and setting curSize/curPos and all that.
+			nextFrameReal := false
+			if err = s.seekTo(nextFramePos); err == nil {
+				if _, _, ok = s.frameDataAt(s.buf); ok {
+					nextFrameReal = true
+				}
+			}
+			if err = s.seekTo(returnPos); err != nil && s.curSize == 0 {
+				return nil, 0, err
+			}
+			if !nextFrameReal {
+				break
+			}
 
 			s.FrameCount++
 			if s.Info.Bitrate != frame.Bitrate {
@@ -128,21 +150,18 @@ func (s *Scanner) NextFrame() (*AudioFrame, uint64, error) {
 				s.Info.FoundLayer3 = true
 			}
 
-		//potentially ID3v1 tags
-		case bytes.Equal(cur[0:3], ID3v1Header):
-			s.seek = 127
+			done = true
 
 		//potentially ID3v2 tags
 		case bytes.Equal(cur[0:3], ID3v2Header):
-			s.seek, s.Info.ID3v2 = parseID3v2Tag(s.buf[s.r-1 : s.r+7])
-			s.r += 6
-
-		//potentially APE tags
-		case bytes.Equal(s.buf, APEHeader):
-		default:
-			s.r -= 3
+			seekAmount, s.Info.ID3v2 = parseID3v2Tag(s.buf[s.curPos+2 : s.curPos+9])
+			if err = s.seekTo(curAbsPos + seekAmount); err != nil {
+				return nil, 0, err
+			}
 		}
+
+		s.curPos++
 	}
 
-	return frame, pos, nil
+	return frame, uint64(framePos), nil
 }
