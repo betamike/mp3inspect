@@ -46,6 +46,9 @@ func (s *Scanner) seekTo(pos int64) error {
 
 	s.curPos = 0
 	s.curSize, err = s.f.Read(s.buf)
+	if err != nil {
+		return err
+	}
 	s.absPos += int64(s.curSize)
 	return err
 }
@@ -83,8 +86,10 @@ func (s *Scanner) NextFrame() (*AudioFrame, uint64, error) {
 			if err != nil {
 				return nil, 0, err
 			}
-			s.curSize += int(rem)
+			//NOTE: order matters here, don't add the rem value to curSize
+			// before updating absPos, otherwise we will be off by rem bytes
 			s.absPos += int64(s.curSize)
+			s.curSize += int(rem)
 		}
 
 		cur := s.buf[s.curPos : s.curPos+4]
@@ -93,7 +98,6 @@ func (s *Scanner) NextFrame() (*AudioFrame, uint64, error) {
 		switch {
 		//potentially an audio frame
 		case cur[0] == 0xFF && cur[1]&0xE0 == 0xE0:
-			var seekAmount int64
 			if seekAmount, frame, ok = s.frameDataAt(cur); !ok {
 				break
 			}
@@ -101,20 +105,26 @@ func (s *Scanner) NextFrame() (*AudioFrame, uint64, error) {
 			// Where to come back to if the next frame isn't valid
 			returnPos := curAbsPos + 1
 			framePos = curAbsPos
-			nextFramePos := framePos + seekAmount
+			// Seek to the byte right before the next frame
+			nextFramePos := framePos + seekAmount - 1
 
 			// We seek to where the next frame should be and check that it's
-			// there. If it's not we seek back to the return position. seekTo // handles reading into buf and setting curSize/curPos and all that.
+			// there. If it's not we seek back to the return position. seekTo
+			// handles reading into buf and setting curSize/curPos and all that.
 			nextFrameReal := false
 			if err = s.seekTo(nextFramePos); err == nil {
-				if _, _, ok = s.frameDataAt(s.buf); ok {
+				// Seeking put us right up to the end of the file; there are no
+				// more frames, but this last one is real
+				if s.curSize < 4 {
+					nextFrameReal = true
+				} else if _, _, ok = s.frameDataAt(s.buf[1:]); ok {
 					nextFrameReal = true
 				}
 			}
-			if err = s.seekTo(returnPos); err != nil && s.curSize == 0 {
-				return nil, 0, err
-			}
 			if !nextFrameReal {
+				if err = s.seekTo(returnPos); err != nil && s.curSize == 0 {
+					return nil, 0, err
+				}
 				break
 			}
 
