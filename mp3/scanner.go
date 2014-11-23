@@ -164,8 +164,8 @@ func (s *Scanner) NextFrame() (*AudioFrame, uint64, error) {
 
 		//potentially ID3v2 tags
 		case bytes.Equal(cur[0:3], ID3v2Header):
-			seekAmount, s.Info.ID3v2 = parseID3v2Tag(s.buf[s.curPos+2 : s.curPos+9])
-			if err = s.seekTo(curAbsPos + seekAmount); err != nil {
+			seekAmount, s.Info.ID3v2 = parseID3v2Tag(s.buf[s.curPos+3 : s.curPos+10])
+			if err = s.seekTo(curAbsPos + seekAmount - 1); err != nil {
 				return nil, 0, err
 			}
 		}

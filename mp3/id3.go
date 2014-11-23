@@ -7,7 +7,7 @@ type ID3v2Tag struct {
 	Version  uint8
 	Revision uint8
 	Flags    uint16
-	Size     uint64
+	Size     uint32
 }
 
 func parseID3v2Tag(buf []byte) (int64, *ID3v2Tag) {
@@ -17,7 +17,7 @@ func parseID3v2Tag(buf []byte) (int64, *ID3v2Tag) {
 	id3.Flags = uint16(buf[2])
 
 	//unsynchsafe the size
-	id3.Size = uint64(buf[3])<<21 | uint64(buf[4])<<14 | uint64(buf[5])<<7 | uint64(buf[6])
+	id3.Size = uint32(buf[3])<<21 | uint32(buf[4])<<14 | uint32(buf[5])<<7 | uint32(buf[6]) + uint32(10)
 	//footer present
 	if id3.Flags&0x10 == 0x10 {
 		id3.Size += 10
