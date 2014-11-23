@@ -101,7 +101,8 @@ type MP3Info struct {
 
 	UnknownBytes uint64
 
-	FrameCount int
+	FrameCount   int
+	StartGarbage int64
 }
 
 //information about one mp3 audio frame

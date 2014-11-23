@@ -68,6 +68,7 @@ func (s *Scanner) NextFrame() (*AudioFrame, uint64, error) {
 	var seekAmount int64
 	var frame *AudioFrame
 	var framePos int64
+	var garbage int64
 
 	for !done {
 
@@ -168,9 +169,18 @@ func (s *Scanner) NextFrame() (*AudioFrame, uint64, error) {
 			if err = s.seekTo(curAbsPos + seekAmount - 1); err != nil {
 				return nil, 0, err
 			}
+
+		case s.FrameCount == 0:
+			garbage += 1
 		}
 
 		s.curPos++
+	}
+
+	//if this was the first frame found
+	//set the start garbage counter
+	if s.FrameCount == 1 {
+		s.Info.StartGarbage = garbage
 	}
 
 	return frame, uint64(framePos), nil

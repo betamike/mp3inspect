@@ -31,6 +31,9 @@ func printInfo(info *mp3.MP3Info) {
 	if info.FoundMPEG1 && info.FoundLayer3 {
 		fmt.Printf("MPEG v1 Layer III (Inspected %d frames)\n", info.FrameCount)
 	}
+	if info.StartGarbage != 0 {
+		fmt.Printf("(found %d bytes of non-audio, non-tag data before first valid frame)\n", info.StartGarbage)
+	}
 	if info.FoundMPEG2 || info.FoundMPEG25 ||
 		info.FoundLayer2 || info.FoundLayer1 {
 		fmt.Printf("(Found non-mp3 frame versions)\n")
