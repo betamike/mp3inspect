@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
+	"text/tabwriter"
 
 	"github.com/betamike/mp3inspect/mp3"
 )
@@ -33,16 +35,20 @@ func printInfo(info *mp3.MP3Info) {
 		info.FoundLayer2 || info.FoundLayer1 {
 		fmt.Printf("(Found non-mp3 frame versions)\n")
 	}
+
+	tabWriter := tabwriter.NewWriter(os.Stdout, 0, 4, 0, '\t', 0)
 	brType := "CBR"
 	if info.IsVBR {
 		brType = "VBR"
 	}
-	fmt.Printf("Bitrate:    %d %s\n", info.Bitrate, brType)
-	fmt.Printf("Samplerate: %d\n", info.Samplerate)
+	fmt.Fprintf(tabWriter, "Bitrate:\t%d %s\n", info.Bitrate, brType)
+	fmt.Fprintf(tabWriter, "Samplerate:\t%d\n", info.Samplerate)
 	if info.HasID3v1 {
-		fmt.Printf("ID3v1:      Found\n")
+		fmt.Fprintf(tabWriter, "ID3v1:\tFound\n")
 	}
 	if info.ID3v2 != nil {
-		fmt.Printf("ID3v2:      Found (%db)\n", info.ID3v2.Size)
+		fmt.Fprintf(tabWriter, "ID3v2:\tFound (%db)\n", info.ID3v2.Size)
 	}
+
+	tabWriter.Flush()
 }
