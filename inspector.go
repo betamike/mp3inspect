@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"text/tabwriter"
 
@@ -11,23 +10,65 @@ import (
 )
 
 func main() {
+	var pretty bool
+	var skip bool
+
+	flag.BoolVar(&skip, "s", false, "skip printing the output headers")
+	flag.BoolVar(&pretty, "p", false, "print in a pretty human readable format")
+
+	flag.Usage = usage
 	flag.Parse()
-	path := flag.Arg(0)
 
-	if path == "" {
-		log.Fatal("Missing file path!")
+	if len(flag.Args()) < 1 {
+		fatal("missing path to file")
 	}
 
-	info, err := mp3.InspectFile(path)
+	info, err := mp3.InspectFile(flag.Args()[0])
 	if err != nil {
-		fmt.Printf("MP3 inspection failed: %s", err)
-		return
+		fatal("MP3 inspection failed: %s", err)
 	}
-
-	printInfo(info)
+	if pretty {
+		prettyPrintInfo(info)
+	} else {
+		printInfo(info, !skip)
+	}
 }
 
-func printInfo(info *mp3.MP3Info) {
+func fatal(format string, params ...interface{}) {
+	fmt.Fprintf(os.Stderr, format+"\n", params...)
+	os.Stderr.Sync()
+	os.Exit(-1)
+}
+
+func usage() {
+	fmt.Fprintf(os.Stderr, "usage: mp3inspect [flags] <path>\n")
+	flag.PrintDefaults()
+	fmt.Fprintln(os.Stderr, "mp3inspect a simple utility for determining information about an mp3")
+}
+
+func printInfo(info *mp3.MP3Info, header bool) {
+	tabWriter := tabwriter.NewWriter(os.Stdout, 0, 8, 0, '\t', 0)
+	if header {
+		fmt.Fprintln(tabWriter, "num frames\tbr(bps)\tvbr\tsr(hz)\tID3v1\tID3v2\tv2 size(b)\tbad bytes\tbad frames")
+	}
+	fmt.Fprintf(tabWriter, "%d\t%d\t%t\t%d\t%t\t%t\t", info.FrameCount, info.Bitrate, info.IsVBR, info.Samplerate, info.HasID3v1, (info.ID3v2 != nil))
+	if info.ID3v2 == nil {
+		fmt.Fprint(tabWriter, "0\t")
+	} else {
+		fmt.Fprintf(tabWriter, "%d\t", info.ID3v2.Size)
+	}
+	fmt.Fprintf(tabWriter, "%d\t", info.StartGarbage)
+	if info.FoundMPEG2 || info.FoundMPEG25 ||
+		info.FoundLayer2 || info.FoundLayer1 {
+		fmt.Fprint(tabWriter, "1\t")
+	} else {
+		fmt.Fprint(tabWriter, "0\t")
+	}
+	fmt.Fprint(tabWriter, "\n")
+	tabWriter.Flush()
+}
+
+func prettyPrintInfo(info *mp3.MP3Info) {
 	if info.FoundMPEG1 && info.FoundLayer3 {
 		fmt.Printf("MPEG v1 Layer III (Inspected %d frames)\n", info.FrameCount)
 	}
@@ -38,8 +79,7 @@ func printInfo(info *mp3.MP3Info) {
 		info.FoundLayer2 || info.FoundLayer1 {
 		fmt.Printf("(Found non-mp3 frame versions)\n")
 	}
-
-	tabWriter := tabwriter.NewWriter(os.Stdout, 0, 4, 0, '\t', 0)
+	tabWriter := tabwriter.NewWriter(os.Stdout, 0, 8, 0, '\t', 0)
 	brType := "CBR"
 	if info.IsVBR {
 		brType = "VBR"
@@ -52,6 +92,5 @@ func printInfo(info *mp3.MP3Info) {
 	if info.ID3v2 != nil {
 		fmt.Fprintf(tabWriter, "ID3v2:\tFound (%db)\n", info.ID3v2.Size)
 	}
-
 	tabWriter.Flush()
 }
