@@ -3,6 +3,8 @@ package mp3
 var ID3v1Header = []byte{'T', 'A', 'G'}
 var ID3v2Header = []byte{'I', 'D', '3'}
 
+var ID3v1Size = 128
+
 type ID3v2Tag struct {
 	Version  uint8
 	Revision uint8

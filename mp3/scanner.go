@@ -17,17 +17,28 @@ type Scanner struct {
 	FrameCount, curSize int
 	vbrCounter          uint64
 	curPos, absPos      int64
+	eofPos              int64
 
 	Info *MP3Info
 }
 
 func NewScanner(f io.ReadSeeker, version MPEGVersion, layer MPEGLayer) (*Scanner, error) {
+	// Seek the end to get the length of the content
+	eof, err := f.Seek(0, os.SEEK_END)
+	if err != nil {
+		return nil, err
+	}
+	_, err = f.Seek(0, os.SEEK_SET)
+	if err != nil {
+		return nil, err
+	}
 	return &Scanner{
 		f:       f,
 		version: version,
 		layer:   layer,
 		buf:     make([]byte, 4096),
 		Info:    &MP3Info{},
+		eofPos:  eof,
 	}, nil
 }
 
@@ -114,9 +125,10 @@ func (s *Scanner) NextFrame() (*AudioFrame, uint64, error) {
 			// handles reading into buf and setting curSize/curPos and all that.
 			nextFrameReal := false
 			if err = s.seekTo(nextFramePos); err == nil {
-				// Seeking put us right up to the end of the file; there are no
-				// more frames, but this last one is real
-				if s.curSize < 4 {
+				// Seeking put us right up to the end of the file (minus a possible
+				// ID3v1 tag); there are no more frames, but this one is good
+				left := s.eofPos - (s.absPos - int64(s.curSize)) - 1
+				if left == 0 || left == int64(ID3v1Size) {
 					nextFrameReal = true
 				} else if _, _, ok = s.frameDataAt(s.buf[1:]); ok {
 					nextFrameReal = true
@@ -167,6 +179,15 @@ func (s *Scanner) NextFrame() (*AudioFrame, uint64, error) {
 		case bytes.Equal(cur[0:3], ID3v2Header):
 			seekAmount, s.Info.ID3v2 = parseID3v2Tag(s.buf[s.curPos+3 : s.curPos+10])
 			if err = s.seekTo(curAbsPos + seekAmount - 1); err != nil {
+				return nil, 0, err
+			}
+
+		case bytes.Equal(cur[0:3], ID3v1Header):
+			if (s.eofPos - curAbsPos) != int64(ID3v1Size) {
+				break
+			}
+			s.Info.HasID3v1 = true
+			if err = s.seekTo(curAbsPos + int64(ID3v1Size) - 1); err != nil {
 				return nil, 0, err
 			}
 
