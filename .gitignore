@@ -1,3 +1,7 @@
 Vagrantfile
 .vagrant/
 .goat/
+
+test/files
+
+bin
