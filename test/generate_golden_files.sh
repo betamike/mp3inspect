@@ -43,18 +43,7 @@ function generate_golden_file {
         exit 1
     fi
 
-    mp3_header_first_4_bytes=$(xxd -p -l 4 "$file")
-
-    mp3_header_first_4_digits=${mp3_header_first_4_bytes:0:4}
-
-    mp3_header_last_2_digits=${mp3_header_first_4_bytes: -2}
-
-    # The header should stay the same between frames other than the bit rate bits and the pad bit
-    # For CBR, the pad bit might change between frames
-    # For VBR the bit rate bits and pad bit might be different between frames
-    regex_string="${mp3_header_first_4_digits}[[:xdigit:]][[:xdigit:]]${mp3_header_last_2_digits}"
-
-    frame_count=$(xxd -p "$file" | grep -o "$regex_string" | wc -l)
+    frame_count=$(fq '.frames | length' "$file")
 
     golden_file_name=".$(echo "${file}" | cut -d. -f2).golden"
 
